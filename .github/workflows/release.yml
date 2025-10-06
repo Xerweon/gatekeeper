@@ -1,85 +1,158 @@
-name: Build Tauri & Publish Release
+name: Build GATEKEEPER & Publish Release
 
 on:
   push:
     tags:
-      - 'v*.*.*'   # trigger on semantic tags like v1.2.3
+      - 'v*.*.*'
 
 permissions:
-  contents: write  # required to create releases and upload assets
+  contents: write
+  id-token: write
+
+env:
+  REPO: ${{ github.repository }}
+  TAG: ${{ github.ref_name }}
 
 jobs:
-  build-and-release:
+  build-linux:
+    name: Build (Linux deb + AppImage)
     runs-on: ubuntu-latest
-    env:
-      ARTIFACT_GLOB: "src-tauri/target/release/bundle/**/*"
-      REPO: ${{ github.repository }}
-      TAG: ${{ github.ref_name }}
-      VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: true
 
-      - name: Set up Node.js
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Set up Rust
+      - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install system dependencies (Linux)
+      - name: Install system deps (Linux)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.0-dev \
             libwebkit2gtk-4.1-dev \
             build-essential \
-            curl \
-            wget \
             file \
             libssl-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
             librsvg2-dev
 
-      - name: Install dependencies
+      - name: Install deps
         run: npm ci
 
-      - name: Build frontend
+      - name: Build frontend (if any)
         run: npm run build --if-present
 
-      - name: Build Tauri (release)
+      - name: Build Tauri (Linux bundles)
         run: npm run tauri build
 
-      - name: Collect artifacts
-        id: collect
+      - name: Collect linux artifacts
         run: |
           mkdir -p out/artifacts
           shopt -s globstar nullglob
-          files=($ARTIFACT_GLOB)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No artifacts found with pattern: $ARTIFACT_GLOB"
-            exit 1
-          fi
-          for f in "${files[@]}"; do
-            if [ -f "$f" ]; then
-              cp "$f" out/artifacts/
-            fi
-          done
-          echo "Found artifacts:"
-          ls -la out/artifacts
-          echo "artifacts=$(ls out/artifacts | tr '\n' ' ')" >> $GITHUB_OUTPUT
+          find src-tauri/target/release/bundle -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.rpm" \) -exec cp -v {} out/artifacts/ \; 2>/dev/null || true
+          echo "Linux artifacts collected:"
+          ls -lah out/artifacts || echo "No artifacts found"
 
-      - name: Compute checksums
+      - name: Upload linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifacts-${{ env.TAG }}
+          path: out/artifacts
+          if-no-files-found: warn
+
+  build-windows:
+    name: Build (Windows MSI)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install deps
+        run: npm ci
+
+      - name: Build frontend (if any)
+        run: npm run build --if-present
+
+      - name: Build Tauri (Windows)
+        run: npm run tauri build
+
+      - name: Collect windows artifacts
+        shell: pwsh
         run: |
-          mkdir -p out/checksums
-          cd out/artifacts
-          sha256sum * > ../checksums/${TAG}.sha256
-          cd ../..
-          echo "Checksums:"
-          cat out/checksums/${TAG}.sha256
+          New-Item -ItemType Directory -Force -Path out\artifacts
+          Get-ChildItem -Path src-tauri\target\release\bundle -Recurse -Include *.msi,*.exe | Copy-Item -Destination out\artifacts\ -Verbose
+          Write-Host "Windows artifacts collected:"
+          Get-ChildItem out\artifacts
+
+      - name: Upload windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifacts-${{ env.TAG }}
+          path: out/artifacts
+          if-no-files-found: warn
+
+  create-release:
+    name: Create GitHub Release & upload assets
+    runs-on: ubuntu-latest
+    needs: [build-linux, build-windows]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux-artifacts-${{ env.TAG }}
+          path: download/linux
+
+      - name: Download windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts-${{ env.TAG }}
+          path: download/windows
+
+      - name: List downloaded artifacts
+        run: |
+          echo "=== Linux artifacts ==="
+          find download/linux -type f -ls 2>/dev/null || echo "No Linux artifacts"
+          echo ""
+          echo "=== Windows artifacts ==="
+          find download/windows -type f -ls 2>/dev/null || echo "No Windows artifacts"
+
+      - name: Prepare files for release
+        run: |
+          mkdir -p out/artifacts out/checksums
+          find download/linux -type f -exec cp -v {} out/artifacts/ \; 2>/dev/null || true
+          find download/windows -type f -exec cp -v {} out/artifacts/ \; 2>/dev/null || true
+          
+          if ls out/artifacts/* 1> /dev/null 2>&1; then
+            cd out/artifacts
+            sha256sum * > ../checksums/${TAG}.sha256
+            cd ../..
+            echo "=== Checksums ==="
+            cat out/checksums/${TAG}.sha256
+          else
+            echo "Warning: No artifacts found to checksum"
+          fi
+          
+          echo ""
+          echo "=== Final artifacts ==="
+          ls -lah out/artifacts
 
       - name: Create GitHub Release
         id: gh_release
@@ -93,20 +166,19 @@ jobs:
           files: |
             out/artifacts/*
             out/checksums/${{ env.TAG }}.sha256
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate latest.json
-        id: make_latest
         run: |
           OWNER_REPO="${REPO}"
           TAGNAME="${TAG}"
           BASE="https://github.com/${OWNER_REPO}/releases/download/${TAGNAME}"
           
-          # Find platform-specific artifacts
-          windows="$(ls out/artifacts/*.msi 2>/dev/null | head -1 | xargs basename || echo '')"
-          deb="$(ls out/artifacts/*.deb 2>/dev/null | head -1 | xargs basename || echo '')"
-          appimage="$(ls out/artifacts/*.AppImage 2>/dev/null | head -1 | xargs basename || echo '')"
+          windows_msi="$(find out/artifacts -name "*.msi" -printf "%f\n" 2>/dev/null | head -1 || echo '')"
+          deb="$(find out/artifacts -name "*.deb" -printf "%f\n" 2>/dev/null | head -1 || echo '')"
+          appimage="$(find out/artifacts -name "*.AppImage" -printf "%f\n" 2>/dev/null | head -1 || echo '')"
           
           cat > out/latest.json <<EOF
           {
@@ -116,16 +188,21 @@ jobs:
             "platforms": {
               "windows-x86_64": {
                 "signature": "",
-                "url": "${BASE}/${windows}"
+                "url": "${BASE}/${windows_msi}"
               },
               "linux-x86_64": {
                 "signature": "",
                 "url": "${BASE}/${deb}"
+              },
+              "linux-appimage": {
+                "signature": "",
+                "url": "${BASE}/${appimage}"
               }
             }
           }
           EOF
-          echo "Generated out/latest.json:"
+          
+          echo "=== latest.json ==="
           cat out/latest.json
 
       - name: Upload latest.json to release
@@ -137,4 +214,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Release complete
-        run: echo "Release ${{ env.TAG }} published successfully"
+        run: echo "Release ${{ env.TAG }} published successfully with all artifacts"

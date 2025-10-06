@@ -5,7 +5,7 @@ const LogoWithGradient = () => {
         <h1 className="text-base font-medium tracking-tight flex items-baseline">
           <span className="text-zinc-300">xerw</span>
           <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-cyan-300 font-semibold">
-            eon
+            eon™
           </span>
           <span className="mx-1.5 text-zinc-600 dark:text-zinc-700">|</span>
           <div className="relative">

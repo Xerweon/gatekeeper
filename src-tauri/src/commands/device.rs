@@ -1,6 +1,6 @@
-use serde::Serialize;
-use sysinfo::{System, Networks};
 use get_if_addrs::{get_if_addrs, IfAddr};
+use serde::Serialize;
+use sysinfo::{Networks, System};
 
 #[derive(Serialize)]
 pub struct DeviceInfo {
@@ -25,24 +25,24 @@ pub fn get_device_info() -> Result<DeviceInfo, String> {
 
     let networks = Networks::new_with_refreshed_list();
 
-    
     for (interface_name, network) in &networks {
         let mac_addr = network.mac_address();
-        
-        
+
         let mac_bytes = [
-            mac_addr.0[0], mac_addr.0[1], mac_addr.0[2],
-            mac_addr.0[3], mac_addr.0[4], mac_addr.0[5]
+            mac_addr.0[0],
+            mac_addr.0[1],
+            mac_addr.0[2],
+            mac_addr.0[3],
+            mac_addr.0[4],
+            mac_addr.0[5],
         ];
-        
-        
+
         if mac_bytes != [0; 6] {
             let mac_str = format!(
                 "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-                mac_bytes[0], mac_bytes[1], mac_bytes[2],
-                mac_bytes[3], mac_bytes[4], mac_bytes[5]
+                mac_bytes[0], mac_bytes[1], mac_bytes[2], mac_bytes[3], mac_bytes[4], mac_bytes[5]
             );
-            
+
             mac_address = Some(mac_str);
             _iface_name = Some(interface_name.clone());
 
@@ -63,7 +63,7 @@ pub fn get_device_info() -> Result<DeviceInfo, String> {
                     }
                 }
             }
-            
+
             if ip_address.is_some() {
                 break;
             }
@@ -74,6 +74,6 @@ pub fn get_device_info() -> Result<DeviceInfo, String> {
         os_name,
         os_version,
         host_name,
-        mac_address
+        mac_address,
     })
 }
