@@ -1,4 +1,4 @@
-import { Monitor, Cpu } from "lucide-react"
+import { Monitor, Cpu, Hash } from "lucide-react"
 import type { DeviceInfo } from "@/types/device.type"
 import { cn } from "@/lib/utils"
 
@@ -20,10 +20,10 @@ const DeviceInfoComponent = ({ deviceInfo, className }: DeviceInfoProps) => {
           <span className="truncate">{deviceInfo.osName} {deviceInfo.osVersion}</span>
         </div>
 
-        {/* <div className="flex items-center gap-2 text-zinc-400">
+        <div className="flex items-center gap-1 text-zinc-400">
           <Hash size={16} className="text-zinc-500 flex-shrink-0" />
-          <span className="truncate">{deviceInfo.workstationId}</span>
-        </div> */}
+          <span className="truncate">Workstation ID - {deviceInfo.workstationId}</span>
+        </div>
        
         <div className="ml-auto hidden sm:block">
           <div className="flex items-center gap-2">

@@ -32,7 +32,7 @@ const isCheckedIn = (checkins: UserCheckin[], workstationId?: string): boolean =
       console.warn("Invalid checkinTime:", ci.checkinTime);
       return false;
     }
-    // IMPORTANT: require matching workstationId AND same date
+    
     return (
       (ci.workstationId === workstationId || ci.workstationId === undefined) &&
       d.toISOString().split("T")[0] === today
