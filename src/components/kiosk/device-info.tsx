@@ -19,6 +19,11 @@ const DeviceInfoComponent = ({ deviceInfo, className }: DeviceInfoProps) => {
           <Cpu size={16} className="text-zinc-500 flex-shrink-0" />
           <span className="truncate">{deviceInfo.osName} {deviceInfo.osVersion}</span>
         </div>
+
+        {/* <div className="flex items-center gap-2 text-zinc-400">
+          <Hash size={16} className="text-zinc-500 flex-shrink-0" />
+          <span className="truncate">{deviceInfo.workstationId}</span>
+        </div> */}
        
         <div className="ml-auto hidden sm:block">
           <div className="flex items-center gap-2">

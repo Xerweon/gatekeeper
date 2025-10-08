@@ -31,6 +31,7 @@ export async function setDeviceInfo(info: {
   hostName: string;
   osName: string;
   osVersion: string;
+  workstationId?: string;
 }): Promise<void> {
   const store = await getDeviceStore();
   await store.set("deviceInfo", info);
@@ -41,6 +42,7 @@ export async function getDeviceInfo(): Promise<{
   hostName: string;
   osName: string;
   osVersion: string;
+  workstationId?: string;
 } | undefined> {
   const store = await getDeviceStore();
   return await store.get("deviceInfo");

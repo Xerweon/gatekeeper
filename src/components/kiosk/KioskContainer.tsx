@@ -13,18 +13,33 @@ import CheckoutDialog from "./checkout-dialog"
 import CheckinDialog from "./checkin-dialog"
 import { getDeviceId, getDeviceInfo } from "@/lib/device"
 
-const isCheckedIn = (checkins: UserCheckin[]): boolean => {
-  const today = new Date().toISOString().split("T")[0]
+const isCheckedIn = (checkins: UserCheckin[], workstationId?: string): boolean => {
+  if (!Array.isArray(checkins) || checkins.length === 0) return false;
+  if (!workstationId) {
+    // fallback: previous behaviour (date-only)
+    const today = new Date().toISOString().split("T")[0];
+    return checkins.some(ci => {
+      const d = new Date(ci.checkinTime);
+      return !isNaN(d.getTime()) && d.toISOString().split("T")[0] === today;
+    });
+  }
 
-  return checkins.some((checkin) => {
-    const checkinDate = new Date(checkin.checkinTime)
-    if (isNaN(checkinDate.getTime())) {
-      console.warn("Invalid checkinTime:", checkin.checkinTime)
-      return false
+  const today = new Date().toISOString().split("T")[0];
+  return checkins.some(ci => {
+    if (!ci.checkinTime) return false;
+    const d = new Date(ci.checkinTime);
+    if (isNaN(d.getTime())) {
+      console.warn("Invalid checkinTime:", ci.checkinTime);
+      return false;
     }
-    return checkinDate.toISOString().split("T")[0] === today
-  })
-}
+    // IMPORTANT: require matching workstationId AND same date
+    return (
+      (ci.workstationId === workstationId || ci.workstationId === undefined) &&
+      d.toISOString().split("T")[0] === today
+    );
+  });
+};
+
 
 
 const KioskContainer = ({ user }: { user: User | undefined }) => {
@@ -38,6 +53,7 @@ const KioskContainer = ({ user }: { user: User | undefined }) => {
     hostName: "Loading...",
     osName: "Loading...",
     osVersion: "Loading...",
+    workstationId: "Loading..."
   })
   const [showCheckinDialog, setShowCheckinDialog] = useState(false)
   const [checkinPassword, setCheckinPassword] = useState("")
@@ -49,54 +65,56 @@ const KioskContainer = ({ user }: { user: User | undefined }) => {
   useEffect(() => {
     const fetchStaffsAndDeviceInfo = async () => {
       try {
-        const authToken = await getAuthToken()
-
+        const authToken = await getAuthToken();
         if (!authToken) {
-          console.error("Auth token is not defined")
-          return
+          console.error("Auth token is not defined");
+          return;
         }
 
-        if (!user?.centerId) {
-          return
-        }
-        // console.log(user.centerId, "User centerId")
+        if (!user?.centerId) return;
 
-        const [device, response] = await Promise.all([
+        // Get both device info and workstationId
+        const [device, workstationId] = await Promise.all([
           getDeviceInfo(),
-          getAllStaffs(user.centerId, authToken),
-        ])
+          getDeviceId(),
+        ]);
 
         setDeviceInfo({
           hostName: device?.hostName || "Unknown Device",
           osName: device?.osName || "Unknown OS",
           osVersion: device?.osVersion || "Unknown Version",
-        })
+          workstationId: workstationId || "Unknown workstation"
+        });
+        
+        const response = await getAllStaffs(user.centerId, authToken);
 
         if (!response.success) {
-          console.error("Failed to fetch staff:", response.message)
-          return
+          console.error("Failed to fetch staff:", response.message);
+          return;
         }
-        // console.log("Fetched staff response:", response)
 
-        const staffData = response.data.map((s: Staff) => ({
+        const staffData: Staff[] = (response.data || []).map((s: Staff) => ({
           ...s,
-          isCheckedIn: isCheckedIn(s.checkins),
-        }))
+          isCheckedIn: isCheckedIn(s.checkins || [], workstationId),
+        }));
 
-        setStaff(staffData)
-        // console.log("Fetched staff data:", staffData)
+        setStaff(staffData);
 
-        const currentlyCheckedIn = staffData.find((s: Staff) => s.isCheckedIn)
+        // find staff checked in on this workstation
+        const currentlyCheckedIn = staffData.find((s: Staff) => s.isCheckedIn);
         if (currentlyCheckedIn) {
-          setCheckedInStaff(currentlyCheckedIn)
+          setCheckedInStaff(currentlyCheckedIn);
+        } else {
+          setCheckedInStaff(null);
         }
       } catch (error) {
-        console.error("Error in fetchStaffsAndDeviceInfo:", error)
+        console.error("Error in fetchStaffsAndDeviceInfo:", error);
       }
-    }
+    };
 
-    fetchStaffsAndDeviceInfo()
-  }, [user?.centerId])
+    fetchStaffsAndDeviceInfo();
+  }, [user?.centerId]);
+
 
   const handleCheckIn = (staffId: string) => {
     if (checkedInStaff) return

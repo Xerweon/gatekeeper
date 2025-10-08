@@ -3,4 +3,5 @@ export type DeviceInfo = {
   osName: string;
   osVersion: string;
   macAddress?: string;
+  workstationId?: string;
 };

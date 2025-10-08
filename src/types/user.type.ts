@@ -31,6 +31,7 @@ export type UserCheckin = {
   checkinTime: Date;
   checkoutTime: Date | null;
   date: Date;
+  workstationId?: string;
   workstation: CenterWorkstation;
 };
 
