@@ -14,7 +14,6 @@ pub fn run() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
-            // Just initialize the store, don't do heavy operations here
             let _store = app.store("store.json")?;
             println!("Store initialized successfully");
             Ok(())
