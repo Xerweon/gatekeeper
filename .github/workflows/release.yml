@@ -1,222 +1,60 @@
-name: Build GATEKEEPER & Publish Release
+name: 'Publish GATEKEEPER'
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
-
-permissions:
-  contents: write
-  id-token: write
-
-env:
-  REPO: ${{ github.repository }}
-  TAG: ${{ github.ref_name }}
+    branches:
+      - release
+  workflow_dispatch:
 
 jobs:
-  build-linux:
-    name: Build (Linux deb + AppImage)
-    runs-on: ubuntu-latest
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest' # for Arm based macs (M1 and above).
+            args: '--target aarch64-apple-darwin'
+          - platform: 'macos-latest' # for Intel based macs.
+            args: '--target x86_64-apple-darwin'
+          - platform: 'ubuntu-22.04'
+            args: ''
+          - platform: 'windows-latest'
+            args: ''
+
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: true
 
-      - name: Setup Node
+      - name: setup node
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: lts/*
 
-      - name: Setup Rust
+      - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Install system dependencies (Linux)
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
-            sudo apt-get update
-            sudo apt-get install -y software-properties-common
-            sudo add-apt-repository universe
-            sudo apt-get update
-            sudo apt-get install -y \
-            libwebkit2gtk-4.0-dev \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libssl-dev \
-            libgtk-3-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Install deps
-        run: npm ci
+      - name: install frontend dependencies
+        run: npm install # change to yarn/pnpm/bun if needed
 
-      - name: Build frontend (if any)
-        run: npm run build --if-present
-
-      - name: Build Tauri (Linux bundles)
-        run: npm run tauri build
-
-      - name: Collect linux artifacts
-        run: |
-          mkdir -p out/artifacts
-          shopt -s globstar nullglob
-          find src-tauri/target/release/bundle -type f \( -name "*.deb" -o -name "*.AppImage" -o -name "*.rpm" \) -exec cp -v {} out/artifacts/ \; 2>/dev/null || true
-          echo "Linux artifacts collected:"
-          ls -lah out/artifacts || echo "No artifacts found"
-
-      - name: Upload linux artifacts
-        uses: actions/upload-artifact@v4
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          name: linux-artifacts-${{ env.TAG }}
-          path: out/artifacts
-          if-no-files-found: warn
-
-  build-windows:
-    name: Build (Windows MSI)
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: true
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install deps
-        run: npm ci
-
-      - name: Build frontend (if any)
-        run: npm run build --if-present
-
-      - name: Build Tauri (Windows)
-        run: npm run tauri build
-
-      - name: Collect windows artifacts
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path out\artifacts
-          Get-ChildItem -Path src-tauri\target\release\bundle -Recurse -Include *.msi,*.exe | Copy-Item -Destination out\artifacts\ -Verbose
-          Write-Host "Windows artifacts collected:"
-          Get-ChildItem out\artifacts
-
-      - name: Upload windows artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: windows-artifacts-${{ env.TAG }}
-          path: out/artifacts
-          if-no-files-found: warn
-
-  create-release:
-    name: Create GitHub Release & upload assets
-    runs-on: ubuntu-latest
-    needs: [build-linux, build-windows]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download linux artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: linux-artifacts-${{ env.TAG }}
-          path: download/linux
-
-      - name: Download windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: windows-artifacts-${{ env.TAG }}
-          path: download/windows
-
-      - name: List downloaded artifacts
-        run: |
-          echo "=== Linux artifacts ==="
-          find download/linux -type f -ls 2>/dev/null || echo "No Linux artifacts"
-          echo ""
-          echo "=== Windows artifacts ==="
-          find download/windows -type f -ls 2>/dev/null || echo "No Windows artifacts"
-
-      - name: Prepare files for release
-        run: |
-          mkdir -p out/artifacts out/checksums
-          find download/linux -type f -exec cp -v {} out/artifacts/ \; 2>/dev/null || true
-          find download/windows -type f -exec cp -v {} out/artifacts/ \; 2>/dev/null || true
-          
-          if ls out/artifacts/* 1> /dev/null 2>&1; then
-            cd out/artifacts
-            sha256sum * > ../checksums/${TAG}.sha256
-            cd ../..
-            echo "=== Checksums ==="
-            cat out/checksums/${TAG}.sha256
-          else
-            echo "Warning: No artifacts found to checksum"
-          fi
-          
-          echo ""
-          echo "=== Final artifacts ==="
-          ls -lah out/artifacts
-
-      - name: Create GitHub Release
-        id: gh_release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          name: Release ${{ env.TAG }}
-          body: "Automated release for ${{ env.TAG }}"
-          draft: false
+          tagName: app-v__VERSION__
+          releaseName: 'Gatekeeper v__VERSION__'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true
           prerelease: false
-          files: |
-            out/artifacts/*
-            out/checksums/${{ env.TAG }}.sha256
-          fail_on_unmatched_files: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate latest.json
-        run: |
-          OWNER_REPO="${REPO}"
-          TAGNAME="${TAG}"
-          BASE="https://github.com/${OWNER_REPO}/releases/download/${TAGNAME}"
-          
-          windows_msi="$(find out/artifacts -name "*.msi" -printf "%f\n" 2>/dev/null | head -1 || echo '')"
-          deb="$(find out/artifacts -name "*.deb" -printf "%f\n" 2>/dev/null | head -1 || echo '')"
-          appimage="$(find out/artifacts -name "*.AppImage" -printf "%f\n" 2>/dev/null | head -1 || echo '')"
-          
-          cat > out/latest.json <<EOF
-          {
-            "version": "${TAGNAME}",
-            "notes": "Release ${TAGNAME}",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "windows-x86_64": {
-                "signature": "",
-                "url": "${BASE}/${windows_msi}"
-              },
-              "linux-x86_64": {
-                "signature": "",
-                "url": "${BASE}/${deb}"
-              },
-              "linux-appimage": {
-                "signature": "",
-                "url": "${BASE}/${appimage}"
-              }
-            }
-          }
-          EOF
-          
-          echo "=== latest.json ==="
-          cat out/latest.json
-
-      - name: Upload latest.json to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ env.TAG }}
-          files: out/latest.json
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Release complete
-        run: echo "Release ${{ env.TAG }} published successfully with all artifacts"
+          args: ${{ matrix.args }}
