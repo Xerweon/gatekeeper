@@ -38,7 +38,8 @@
     "copyright": "Copyright © 2025",
     "category": "Utility",
     "shortDescription": "Staff Kiosk for xerweon",
-    "longDescription": "Staff Kiosk where staff have to check-in inorder to access xerweon"
+    "longDescription": "Staff Kiosk where staff have to check-in inorder to access xerweon",
+    "createUpdaterArtifacts": true
   },
   "plugins": {
     "updater": {
