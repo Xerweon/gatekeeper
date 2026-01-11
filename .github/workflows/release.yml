@@ -80,10 +80,17 @@ jobs:
           VERSION=${GITHUB_REF_NAME#v}
 
           get_sig () {
-            gh release view v$VERSION --json assets \
+            URL=$(gh release view v$VERSION --json assets \
               --jq ".assets[] | select(.name | endswith(\"$1\")) | .url" \
-              | xargs curl -s
+              | head -n 1)
+
+            if [ -z "$URL" ]; then
+              echo ""
+            else
+              curl -s "$URL"
+            fi
           }
+
 
           APPIMAGE_SIG=$(get_sig ".AppImage.sig")
           DEB_SIG=$(get_sig ".deb.sig")
@@ -101,24 +108,25 @@ jobs:
                 "signature": "$APPIMAGE_SIG"
               },
               "linux-x86_64-deb": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-gatekeeper_${VERSION}_amd64.deb",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_amd64.deb",
                 "signature": "$DEB_SIG"
               },
               "windows-x86_64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/Gatekeeper_${VERSION}_x64_en-US.msi",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_x64_en-US.msi",
                 "signature": "$MSI_SIG"
               },
               "darwin-x86_64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/Gatekeeper_${VERSION}_x64.dmg",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_x64.dmg",
                 "signature": "$MAC_X64_SIG"
               },
               "darwin-aarch64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/Gatekeeper_${VERSION}_aarch64.dmg",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_aarch64.dmg",
                 "signature": "$MAC_ARM_SIG"
               }
             }
           }
           EOF
+
 
       - name: Upload latest.json
         env:
