@@ -1,4 +1,4 @@
-name: 'Publish GATEKEEPER'
+name: Publish GATEKEEPER
 
 on:
   push:
@@ -7,47 +7,45 @@ on:
   workflow_dispatch:
 
 jobs:
-  publish-tauri:
+  build:
+    name: Build binaries
     permissions:
       contents: write
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # for Arm based macs (M1 and above).
+          - os: macos-latest
             args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest' # for Intel based macs.
+          - os: macos-latest
             args: '--target x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04'
+          - os: ubuntu-22.04
             args: ''
-          - platform: 'windows-latest'
+          - os: windows-latest
             args: ''
 
-    runs-on: ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: setup node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: lts/*
 
-      - name: install pnpm
-        run: npm install -g pnpm
+      - run: npm install -g pnpm
 
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Linux deps
+        if: matrix.os == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-       
-      - name: install frontend dependencies
-        run: pnpm install 
+
+      - run: pnpm install
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -56,23 +54,42 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: 'Gatekeeper v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
+          releaseName: Gatekeeper v__VERSION__
+          releaseBody: See the assets to download this version and install.
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
 
+  generate-updater:
+    name: Generate latest.json
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install gh
+        run: sudo apt-get install -y gh jq curl
+
       - name: Generate latest.json
-        if: matrix.platform == 'ubuntu-22.04'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-          APPIMAGE_SIG=$(cat src-tauri/target/release/bundle/appimage/*.AppImage.sig)
-          DEB_SIG=$(cat src-tauri/target/release/bundle/deb/*.deb.sig)
-          MSI_SIG=$(cat src-tauri/target/release/bundle/msi/*.msi.sig)
-          MAC_INTEL_SIG=$(cat src-tauri/target/release/bundle/dmg/*x64*.dmg.sig)
-          MAC_ARM_SIG=$(cat src-tauri/target/release/bundle/dmg/*aarch64*.dmg.sig)
+          get_sig () {
+            gh release view v$VERSION --json assets \
+              --jq ".assets[] | select(.name | endswith(\"$1\")) | .url" \
+              | xargs curl -s
+          }
+
+          APPIMAGE_SIG=$(get_sig ".AppImage.sig")
+          DEB_SIG=$(get_sig ".deb.sig")
+          MSI_SIG=$(get_sig ".msi.sig")
+          MAC_X64_SIG=$(get_sig "x64.dmg.sig")
+          MAC_ARM_SIG=$(get_sig "aarch64.dmg.sig")
 
           cat <<EOF > latest.json
           {
@@ -93,7 +110,7 @@ jobs:
               },
               "darwin-x86_64": {
                 "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/Gatekeeper_${VERSION}_x64.dmg",
-                "signature": "$MAC_INTEL_SIG"
+                "signature": "$MAC_X64_SIG"
               },
               "darwin-aarch64": {
                 "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/Gatekeeper_${VERSION}_aarch64.dmg",
@@ -103,11 +120,8 @@ jobs:
           }
           EOF
 
-
       - name: Upload latest.json
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          gh release upload v$VERSION latest.json --clobber
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+        run: |
+          gh release upload v${GITHUB_REF_NAME#v} latest.json --clobber
