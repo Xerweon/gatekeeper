@@ -55,9 +55,59 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: app-v__VERSION__
+          tagName: v__VERSION__
           releaseName: 'Gatekeeper v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+      - name: Generate latest.json
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+          APPIMAGE_SIG=$(cat src-tauri/target/release/bundle/appimage/*.AppImage.sig)
+          DEB_SIG=$(cat src-tauri/target/release/bundle/deb/*.deb.sig)
+          MSI_SIG=$(cat src-tauri/target/release/bundle/msi/*.msi.sig)
+          MAC_INTEL_SIG=$(cat src-tauri/target/release/bundle/dmg/*x64*.dmg.sig)
+          MAC_ARM_SIG=$(cat src-tauri/target/release/bundle/dmg/*aarch64*.dmg.sig)
+
+          cat <<EOF > latest.json
+          {
+            "version": "$VERSION",
+            "notes": "Release $VERSION",
+            "platforms": {
+              "linux-x86_64": {
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_amd64.AppImage",
+                "signature": "$APPIMAGE_SIG"
+              },
+              "linux-x86_64-deb": {
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-gatekeeper_${VERSION}_amd64.deb",
+                "signature": "$DEB_SIG"
+              },
+              "windows-x86_64": {
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/Gatekeeper_${VERSION}_x64_en-US.msi",
+                "signature": "$MSI_SIG"
+              },
+              "darwin-x86_64": {
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/Gatekeeper_${VERSION}_x64.dmg",
+                "signature": "$MAC_INTEL_SIG"
+              },
+              "darwin-aarch64": {
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/Gatekeeper_${VERSION}_aarch64.dmg",
+                "signature": "$MAC_ARM_SIG"
+              }
+            }
+          }
+          EOF
+
+
+      - name: Upload latest.json
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          gh release upload v$VERSION latest.json --clobber
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

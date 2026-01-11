@@ -40,7 +40,7 @@ function Index() {
       
           <div>
             <p>
-             <span className="text-zinc-500 text-sm">© 2025 Cirranecs Labs</span>
+             <span className="text-zinc-500 text-sm">© ${new Date().getFullYear()} Cirranex Tech Pvt. Ltd.</span>
             </p>
           </div>
           

@@ -26,7 +26,7 @@ const Kiosk = () => {
               href="#"
               className="text-xs text-zinc-500 hover:text-cyan-400 transition-colors duration-200 flex items-center gap-1"
             >
-              <span>Need help? Contact IT support</span>
+              <span>Need help? Contact support@cirranex.com</span>
             </a>
           </div>
         </div>

@@ -18,7 +18,6 @@ async function apiRequest(
   });
 }
 
-// Export a fetch-like API object for compatibility
 export const api = {
   get: async (url: string, config?: { params?: any; headers?: any }) => {
     const fullUrl = url.startsWith('http') ? url : `${BACKEND_URL}${url}`;
