@@ -78,6 +78,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${GITHUB_REF_NAME#v}
+          
+          # Wait for release to be available with retries
+          echo "Waiting for release v$VERSION to be available..."
+          for i in {1..10}; do
+            if gh release view v$VERSION &>/dev/null; then
+              echo "Release found!"
+              break
+            fi
+            echo "Attempt $i: Release not found yet, waiting 10 seconds..."
+            sleep 10
+          done
 
           get_sig () {
             URL=$(gh release view v$VERSION --json assets \
@@ -91,7 +102,6 @@ jobs:
             fi
           }
 
-
           APPIMAGE_SIG=$(get_sig "_amd64.AppImage.sig")
           DEB_SIG=$(get_sig "_amd64.deb.sig")
           MSI_SIG=$(get_sig "_x64_en-US.msi.sig")
@@ -104,29 +114,28 @@ jobs:
             "notes": "Release $VERSION",
             "platforms": {
               "linux-x86_64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_amd64.AppImage",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_amd64.AppImage",
                 "signature": "$APPIMAGE_SIG"
               },
               "linux-x86_64-deb": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_amd64.deb",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_amd64.deb",
                 "signature": "$DEB_SIG"
               },
               "windows-x86_64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_x64_en-US.msi",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_x64_en-US.msi",
                 "signature": "$MSI_SIG"
               },
               "darwin-x86_64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_x64.dmg",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_x64.dmg",
                 "signature": "$MAC_X64_SIG"
               },
               "darwin-aarch64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon.GATEKEEPER_${VERSION}_aarch64.dmg",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_aarch64.dmg",
                 "signature": "$MAC_ARM_SIG"
               }
             }
           }
           EOF
-
 
       - name: Upload latest.json
         env:
