@@ -54,8 +54,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
-          releaseName: Gatekeeper v__VERSION__
-          releaseBody: See the assets to download this version and install.
+          releaseName: 'xerweon GATEKEEPER v__VERSION__'
+          releaseBody: 'See the assets to download this version and install.'
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -70,75 +70,91 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install gh
-        run: sudo apt-get install -y gh jq curl
-
       - name: Generate latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION=${GITHUB_REF_NAME#v}
           
-          # Wait for release to be available with retries
+          # Wait for release to be fully available
           echo "Waiting for release v$VERSION to be available..."
-          for i in {1..10}; do
+          for i in {1..20}; do
             if gh release view v$VERSION &>/dev/null; then
               echo "Release found!"
+              sleep 15  # Extra wait for all assets to upload
               break
             fi
             echo "Attempt $i: Release not found yet, waiting 10 seconds..."
             sleep 10
           done
 
-          get_sig () {
-            URL=$(gh release view v$VERSION --json assets \
-              --jq ".assets[] | select(.name | endswith(\"$1\")) | .url" \
-              | head -n 1)
-
-            if [ -z "$URL" ]; then
-              echo ""
-            else
-              curl -s "$URL"
-            fi
+          # Function to get signature from release assets
+          get_sig() {
+            local pattern="$1"
+            gh release view v$VERSION --json assets -q ".assets[] | select(.name | contains(\"$pattern\")) | .name" 2>/dev/null | while read -r asset_name; do
+              if [[ "$asset_name" == *.sig ]]; then
+                echo "Found signature file: $asset_name" >&2
+                gh release download v$VERSION -p "$asset_name" -O - 2>/dev/null
+                return 0
+              fi
+            done
+            echo "" >&2
+            return 1
           }
 
-          APPIMAGE_SIG=$(get_sig "_amd64.AppImage.sig")
-          DEB_SIG=$(get_sig "_amd64.deb.sig")
-          MSI_SIG=$(get_sig "_x64_en-US.msi.sig")
-          MAC_X64_SIG=$(get_sig "_x64.dmg.sig")
-          MAC_ARM_SIG=$(get_sig "_aarch64.dmg.sig")
+          echo "Fetching signatures..."
+          APPIMAGE_SIG=$(get_sig "AppImage.tar.gz")
+          DEB_SIG=$(get_sig "amd64.deb.tar.gz")
+          MSI_SIG=$(get_sig "msi.zip")
+          MAC_X64_SIG=$(get_sig "x64.app.tar.gz")
+          MAC_ARM_SIG=$(get_sig "aarch64.app.tar.gz")
+
+          # Debug: Show what we found
+          echo "Signatures found:"
+          echo "AppImage: ${APPIMAGE_SIG:0:50}..."
+          echo "DEB: ${DEB_SIG:0:50}..."
+          echo "MSI: ${MSI_SIG:0:50}..."
+          echo "macOS x64: ${MAC_X64_SIG:0:50}..."
+          echo "macOS ARM: ${MAC_ARM_SIG:0:50}..."
           
-          cat <<EOF > latest.json
+          # Create latest.json with proper updater URLs
+          cat > latest.json <<EOF
           {
             "version": "$VERSION",
-            "notes": "Release $VERSION",
+            "notes": "Release $VERSION - See changelog for details",
+            "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "platforms": {
               "linux-x86_64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_amd64.AppImage",
-                "signature": "$APPIMAGE_SIG"
+                "signature": "$APPIMAGE_SIG",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_amd64.AppImage.tar.gz"
               },
               "linux-x86_64-deb": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_amd64.deb",
-                "signature": "$DEB_SIG"
+                "signature": "$DEB_SIG",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_amd64.deb.tar.gz"
               },
               "windows-x86_64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_x64_en-US.msi",
-                "signature": "$MSI_SIG"
+                "signature": "$MSI_SIG",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_x64_en-US.msi.zip"
               },
               "darwin-x86_64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_x64.dmg",
-                "signature": "$MAC_X64_SIG"
+                "signature": "$MAC_X64_SIG",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_x64.app.tar.gz"
               },
               "darwin-aarch64": {
-                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_aarch64.dmg",
-                "signature": "$MAC_ARM_SIG"
+                "signature": "$MAC_ARM_SIG",
+                "url": "https://github.com/Xerweon/gatekeeper/releases/download/v$VERSION/xerweon-GATEKEEPER_${VERSION}_aarch64.app.tar.gz"
               }
             }
           }
           EOF
 
+          echo "Generated latest.json:"
+          cat latest.json
+
       - name: Upload latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload v${GITHUB_REF_NAME#v} latest.json --clobber
+          VERSION=${GITHUB_REF_NAME#v}
+          gh release upload v$VERSION latest.json --clobber
+          echo "latest.json uploaded successfully!"
