@@ -1,5 +1,5 @@
 import KioskContainer from "@/components/kiosk/KioskContainer";
-import TitleBar from "@/components/topbar/title-bar";
+import TitleBar from "@/components/topbar/TitleBar";
 import { useAuthInit } from "@/hooks/useAuthInit";
 
 
@@ -26,7 +26,7 @@ const Kiosk = () => {
               href="#"
               className="text-xs text-zinc-500 hover:text-cyan-400 transition-colors duration-200 flex items-center gap-1"
             >
-              <span>Need help? Contact support@cirranex.com</span>
+              <span>Need help? Contact +91 99953 06502</span>
             </a>
           </div>
         </div>

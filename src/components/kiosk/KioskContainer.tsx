@@ -6,41 +6,45 @@ import type {  Staff, UserCheckin, User } from "@/types/user.type"
 import type { DeviceInfo } from "@/types/device.type"
 import { getAuthToken } from "@/lib/auth"
 import { checkInStaff, checkOutStaff, getAllStaffs } from "@/lib/api"
-import HeaderSection from "./header-section"
-import CheckedInView from "./checked-in-view"
-import StaffGridView from "./staff-grid-view"
-import CheckoutDialog from "./checkout-dialog"
-import CheckinDialog from "./checkin-dialog"
+import HeaderSection from "./Header"
+import CheckedInView from "./CheckedInView"
+import StaffGridView from "./StaffGridView"
+import CheckoutDialog from "./CheckoutDialog"
+import CheckinDialog from "./CheckinDialog"
 import { getDeviceId, getDeviceInfo } from "@/lib/device"
+import { toast } from "sonner"
 
 const isCheckedIn = (checkins: UserCheckin[], workstationId?: string): boolean => {
   if (!Array.isArray(checkins) || checkins.length === 0) return false;
+  
+  const today = new Date().toISOString().split("T")[0];
+  
   if (!workstationId) {
     // fallback: previous behaviour (date-only)
-    const today = new Date().toISOString().split("T")[0];
     return checkins.some(ci => {
+      if (!ci.checkinTime || ci.checkoutTime) return false; // Skip if checked out
       const d = new Date(ci.checkinTime);
       return !isNaN(d.getTime()) && d.toISOString().split("T")[0] === today;
     });
   }
 
-  const today = new Date().toISOString().split("T")[0];
   return checkins.some(ci => {
-    if (!ci.checkinTime) return false;
+    // Must have checkinTime and NO checkoutTime
+    if (!ci.checkinTime || ci.checkoutTime) return false;
+    
     const d = new Date(ci.checkinTime);
     if (isNaN(d.getTime())) {
       console.warn("Invalid checkinTime:", ci.checkinTime);
       return false;
     }
     
+    // Check if it's today AND matches workstation (or workstation is undefined for backwards compatibility)
     return (
       (ci.workstationId === workstationId || ci.workstationId === undefined) &&
       d.toISOString().split("T")[0] === today
     );
   });
 };
-
-
 
 const KioskContainer = ({ user }: { user: User | undefined }) => {
   const [staff, setStaff] = useState<Staff[] | null>(null)
@@ -59,21 +63,45 @@ const KioskContainer = ({ user }: { user: User | undefined }) => {
   const [checkinPassword, setCheckinPassword] = useState("")
   const [showCheckinPassword, setShowCheckinPassword] = useState(false)
   const [checkinPasswordError, setCheckinPasswordError] = useState("")
-  
+  const [isCheckingIn, setIsCheckingIn] = useState(false)
+  const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [pendingStaffId, setPendingStaffId] = useState<string | null>(null)
+
+  // Extract fetch logic into reusable function
+  const fetchStaffsData = async () => {
+    try {
+      const authToken = await getAuthToken();
+      if (!authToken || !user?.centerId) {
+        console.error("Auth token or centerId is not defined");
+        return;
+      }
+
+      const workstationId = await getDeviceId();
+      const response = await getAllStaffs(user.centerId, authToken);
+
+      if (!response.success) {
+        console.error("Failed to fetch staff:", response.message);
+        return;
+      }
+
+      const staffData: Staff[] = (response.data || []).map((s: Staff) => ({
+        ...s,
+        isCheckedIn: isCheckedIn(s.checkins || [], workstationId),
+      }));
+
+      setStaff(staffData);
+
+      // find staff checked in on this workstation
+      const currentlyCheckedIn = staffData.find((s: Staff) => s.isCheckedIn);
+      setCheckedInStaff(currentlyCheckedIn || null);
+    } catch (error) {
+      console.error("Error fetching staff data:", error);
+    }
+  };
 
   useEffect(() => {
     const fetchStaffsAndDeviceInfo = async () => {
       try {
-        const authToken = await getAuthToken();
-        if (!authToken) {
-          console.error("Auth token is not defined");
-          return;
-        }
-
-        if (!user?.centerId) return;
-
-        // Get both device info and workstationId
         const [device, workstationId] = await Promise.all([
           getDeviceInfo(),
           getDeviceId(),
@@ -86,27 +114,7 @@ const KioskContainer = ({ user }: { user: User | undefined }) => {
           workstationId: workstationId || "Unknown workstation"
         });
         
-        const response = await getAllStaffs(user.centerId, authToken);
-
-        if (!response.success) {
-          console.error("Failed to fetch staff:", response.message);
-          return;
-        }
-
-        const staffData: Staff[] = (response.data || []).map((s: Staff) => ({
-          ...s,
-          isCheckedIn: isCheckedIn(s.checkins || [], workstationId),
-        }));
-
-        setStaff(staffData);
-
-        // find staff checked in on this workstation
-        const currentlyCheckedIn = staffData.find((s: Staff) => s.isCheckedIn);
-        if (currentlyCheckedIn) {
-          setCheckedInStaff(currentlyCheckedIn);
-        } else {
-          setCheckedInStaff(null);
-        }
+        await fetchStaffsData();
       } catch (error) {
         console.error("Error in fetchStaffsAndDeviceInfo:", error);
       }
@@ -135,41 +143,52 @@ const KioskContainer = ({ user }: { user: User | undefined }) => {
 
     if (!authToken || !workstationId) {
       console.error("Auth token or workstationID is not defined");
-      return;
-    }
-    const result = await checkInStaff(
-      pendingStaffId,
-      workstationId,
-      checkinPassword,
-      authToken
-    );
-
-    if (!result.success) {
-      setCheckinPasswordError(result.message || "Failed to check in staff");
+      toast.error('Check-in Failed', {
+        description: 'Missing required information',
+      })
       return;
     }
 
-    // Successful check-in logic here...
-    const staffMember = staff?.find((s) => s.id === pendingStaffId);
-    if (staffMember) {
-      setCheckedInStaff(staffMember);
-      setStaff((prevStaff) =>
-        prevStaff
-          ? prevStaff.map((member) =>
-              member.id === pendingStaffId
-                ? { ...member, isCheckedIn: true }
-                : { ...member, isCheckedIn: false }
-            )
-          : prevStaff
+    setIsCheckingIn(true)
+
+    try {
+      const result = await checkInStaff(
+        pendingStaffId,
+        workstationId,
+        checkinPassword,
+        authToken
       );
-    }
 
-    // Reset dialog states
-    setShowCheckinDialog(false);
-    setCheckinPassword("");
-    setCheckinPasswordError("");
-    setShowCheckinPassword(false);
-    setPendingStaffId(null);
+      if (!result.success) {
+        toast.error('Check-in Failed', {
+          description: result.message || 'Please try again',
+        })
+        setCheckinPasswordError(result.message || "Failed to check in staff");
+        return;
+      }
+
+      toast.success('Checked In Successfully', {
+        description: 'Welcome! You can now login to xerweon.',
+      })
+
+      // Reset dialog states
+      setShowCheckinDialog(false);
+      setCheckinPassword("");
+      setCheckinPasswordError("");
+      setShowCheckinPassword(false);
+      setPendingStaffId(null);
+
+      // Refetch to sync with backend
+      await fetchStaffsData();
+
+    } catch (error) {
+      toast.error('Check-in Failed', {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+      })
+      setCheckinPasswordError("An unexpected error occurred")
+    } finally {
+      setIsCheckingIn(false)
+    }
   };
 
 
@@ -178,33 +197,57 @@ const KioskContainer = ({ user }: { user: User | undefined }) => {
       setPasswordError("Password is required")
       return
     }
+    
     const workstationId = await getDeviceId()
     const token = await getAuthToken();
     const userId = checkedInStaff?.id;
 
     if (!workstationId || !token || !userId) {
       console.error("Workstation ID, staffId or token is not defined")
+      toast.error('Checkout Failed', {
+        description: 'Missing required information',
+      })
       return
     }
     
-    await checkOutStaff({
-      userId,
-      workstationId,
-      token,
-      password,
-      centerId: user?.centerId || "",
-    })
+    setIsCheckingOut(true)
+    
+    try {
+      const checkOutResponse = await checkOutStaff({
+        userId,
+        workstationId,
+        token,
+        password,
+        centerId: user?.centerId || "",
+      })
 
-    // console.log("Check out response:", checkOutResponse)
+      if (checkOutResponse.success) {
+        toast.success('Checked Out Successfully', {
+          description: 'You have been checked out. Have a great day!',
+        })
+        
+        // Reset dialog state
+        setShowCheckoutDialog(false)
+        setPassword("")
+        setPasswordError("")
+        setShowPassword(false)
 
-    setCheckedInStaff(null)
-    setStaff((prevStaff) => 
-      prevStaff ? prevStaff.map(member => ({ ...member, isCheckedIn: false })) : prevStaff
-    )
-    setShowCheckoutDialog(false)
-    setPassword("")
-    setPasswordError("")
-    setShowPassword(false)
+        // Refetch to sync with backend
+        await fetchStaffsData();
+      } else {
+        toast.error('Checkout Failed', {
+          description: checkOutResponse.message || 'Please try again',
+        })
+        setPasswordError(checkOutResponse.message || "Failed to check out")
+      }
+    } catch (error) {
+      toast.error('Checkout Failed', {
+        description: error instanceof Error ? error.message : 'An unexpected error occurred',
+      })
+      setPasswordError("An unexpected error occurred")
+    } finally {
+      setIsCheckingOut(false)
+    }
   }
 
   const getInitials = (name: string) => {
@@ -262,6 +305,7 @@ const KioskContainer = ({ user }: { user: User | undefined }) => {
         passwordError={passwordError}
         setPasswordError={setPasswordError}
         onCheckout={handleCheckOut}
+        isLoading={isCheckingOut}
       />
       
       <CheckinDialog
@@ -274,6 +318,7 @@ const KioskContainer = ({ user }: { user: User | undefined }) => {
         checkinPasswordError={checkinPasswordError}
         setCheckinPasswordError={setCheckinPasswordError}
         onConfirm={confirmCheckIn}
+        isLoading={isCheckingIn}
       />
     </div>
   )

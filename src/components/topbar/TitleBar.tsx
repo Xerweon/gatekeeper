@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "../ui/
 import LogoWithGradient from "../logo/LogoWithGradient"
 import { getCurrentWindow } from "@tauri-apps/api/window"
 import { message } from "@tauri-apps/plugin-dialog"
-
+import { getVersion } from "@tauri-apps/api/app"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,10 +23,17 @@ const TitleBar = () => {
 
   const handleAboutClick = async () => {
     try {
-      await message("Build with React, Tauri and Rust!", {
-        title: "xerweon GATEKEEPER"
-
-      })
+      const currentVersion = await getVersion();
+      await message(
+            `Advanced security and access control solution engineered for modern enterprises.\n\n` +
+            `Built with cutting-edge technology: Tauri/Rust\n` +
+           
+            `© ${new Date().getFullYear()} Cirranex Tech Pvt. Ltd.\n` +
+            `All rights reserved.`,
+            {
+                title: `About xerweon™ GATEKEEPER v${currentVersion}`,
+            }
+        );
     } catch (error) {
       console.error("Failed to show about message:", error)
     }
@@ -61,22 +68,22 @@ const TitleBar = () => {
     <div className="select-none bg-zinc-900 border-b border-zinc-800">
       <div className="flex items-center justify-between h-10">
         {/* Left section - Menu button and Logo */}
-        <div className="flex items-center" data-tauri-drag-region>
+        <div className="flex items-center">
           {/*  */}
           <DropdownMenu>
             <DropdownMenuTrigger>
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10 rounded-none text-zinc-400 hover:text-white hover:bg-zinc-800"
+                className="h-10 w-10 rounded-none text-zinc-400 hover:text-white hover:bg-zinc-800 focus:outline-none"
                 onClick={handleMenuClick}
               >
                 <Menu size={18} />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="rounded-xs">
-              <DropdownMenuLabel className="text-center">Menu</DropdownMenuLabel>
-              <DropdownMenuSeparator />
+              {/* <DropdownMenuLabel className="text-center">Menu</DropdownMenuLabel>
+              <DropdownMenuSeparator /> */}
               <DropdownMenuItem variant="default" onClick={handleAboutClick}>
                 About
               </DropdownMenuItem>

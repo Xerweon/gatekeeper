@@ -1,4 +1,4 @@
-import StaffCard from "./staff-card"
+import StaffCard from "./StaffCard"
 import type { Staff } from "@/types/user.type"
 
 export default function StaffGridView({

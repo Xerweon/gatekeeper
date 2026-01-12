@@ -11,6 +11,7 @@ export default function CheckedInView({
   getInitials: (name: string) => string
   setShowCheckoutDialog: (show: boolean) => void
 }) {
+
   return (
     <div className="max-w-5xl mx-auto ">
       <div className="relative bg-zinc-800/60 backdrop-blur-sm rounded-md p-6 shadow-2xl border border-zinc-700/50 h-110  overflow-hidden">

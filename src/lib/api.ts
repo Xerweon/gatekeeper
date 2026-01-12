@@ -3,8 +3,8 @@ import type { ActionResult } from '@/types/action.type';
 import { fetch } from '@tauri-apps/plugin-http';
 
 const BACKEND_URL = import.meta.env.BACKEND_URL || 'https://backend.xerweon.in/api';
+// const BACKEND_URL = 'http://localhost:3001/api';
 
-// Helper function for API calls
 async function apiRequest(
   url: string,
   options: RequestInit = {}
@@ -108,7 +108,7 @@ export const getAllStaffs = async (
 ): Promise<ActionResult> => {
   try {
     const response = await apiRequest(
-      `${BACKEND_URL}/users/staffs?centerId=${centerId}`,
+      `${BACKEND_URL}/users/staffs/kiosk?centerId=${centerId}`,
       {
         method: 'GET',
         headers: {

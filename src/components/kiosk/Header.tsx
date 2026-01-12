@@ -1,4 +1,4 @@
-import DeviceInfoComponent from "./device-info"
+import DeviceInfoComponent from "./DeviceInfo"
 import type { DeviceInfo } from "@/types/device.type"
 
 export default function HeaderSection({

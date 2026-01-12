@@ -1,5 +1,5 @@
 import DeviceRegistration from "@/components/register-device/DeviceRegistration";
-import TitleBar from "@/components/topbar/title-bar";
+import TitleBar from "@/components/topbar/TitleBar";
 import { useAuthInit } from "@/hooks/useAuthInit";
 
 

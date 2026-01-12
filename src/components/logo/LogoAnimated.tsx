@@ -18,7 +18,7 @@ const LogoAnimated = () => {
 
   return (
     <div
-      className="space-grotesk-300 flex items-center gap-2.5 p-2 select-none"
+      className="inter-300 flex items-center gap-2.5 p-2 select-none"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -38,7 +38,7 @@ const LogoAnimated = () => {
             eon
           </span>
           <span className="mx-1.5 text-zinc-600 dark:text-zinc-700">|</span>
-          <div className="relative">
+          <div className="space-grotesk-300 relative">
             <span className="font-bold text-white tracking-wide uppercase text-sm">GateKeeper</span>
             <div className="absolute -bottom-1 left-0 w-full h-0.5 bg-gradient-to-r from-cyan-400 to-transparent"></div>
           </div>

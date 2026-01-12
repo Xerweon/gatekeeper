@@ -6,6 +6,8 @@ import { useEffect } from "react"
 import RegisterDevice from "./routes/register-device"
 import { clearAuth } from "./lib/auth"
 import Kiosk from "./routes/kiosk"
+
+
 function App() {
 
   useEffect(() => {
@@ -17,8 +19,7 @@ function App() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [])
-  
-
+ 
   return (
    <Router>
     <Routes>

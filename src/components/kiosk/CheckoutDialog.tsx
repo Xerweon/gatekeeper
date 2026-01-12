@@ -11,7 +11,7 @@ export default function CheckoutDialog({
   passwordError,
   setPasswordError,
   onCheckout,
-  isLoading = false, // Add this prop
+  isLoading = false,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void

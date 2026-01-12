@@ -1,4 +1,4 @@
-import TitleBar from "@/components/topbar/title-bar"
+import TitleBar from "@/components/topbar/TitleBar"
 import EntrepreneurAuthForm from "@/components/auth/EntrepreneurAuthForm"
 import { motion } from "framer-motion"
 

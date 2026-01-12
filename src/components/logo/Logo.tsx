@@ -8,7 +8,7 @@ const Logo = () => {
 
   return (
     <div
-      className="space-grotesk-300 flex items-center gap-2 p-2 select-none"
+      className="inter-300 flex items-center gap-2 p-2 select-none"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -29,7 +29,7 @@ const Logo = () => {
           <span className="text-zinc-300">xerw</span>
           <span className="text-cyan-400 font-light">eon</span>
           <span className="mx-1.5 text-zinc-600 dark:text-zinc-700">|</span>
-          <span className="font-bold text-white tracking-wide uppercase text-sm">
+          <span className="space-grotesk-300 font-bold text-white tracking-wide uppercase text-sm">
             Gate<span className="text-cyan-400">Keeper</span>
           </span>
         </h1>

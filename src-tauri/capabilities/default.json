@@ -22,6 +22,9 @@
       "allow": [
         {
           "url": "https://backend.xerweon.in/*"
+        },
+        {
+          "url": "http://localhost:3001/*"
         }
       ]
     },

@@ -1,6 +1,6 @@
 const LogoWithGradient = () => {
   return (
-    <div className="space-grotesk-300 p-2 select-none">
+    <div className="inter-300 p-2 select-none">
       <div className="flex items-center gap-2">
         <h1 className="text-base font-medium tracking-tight flex items-baseline">
           <span className="text-zinc-300">xerw</span>

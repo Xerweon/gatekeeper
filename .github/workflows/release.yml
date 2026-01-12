@@ -92,12 +92,12 @@ jobs:
           }
 
 
-          APPIMAGE_SIG=$(get_sig ".AppImage.sig")
-          DEB_SIG=$(get_sig ".deb.sig")
-          MSI_SIG=$(get_sig ".msi.sig")
-          MAC_X64_SIG=$(get_sig "x64.dmg.sig")
-          MAC_ARM_SIG=$(get_sig "aarch64.dmg.sig")
-
+          APPIMAGE_SIG=$(get_sig "_amd64.AppImage.sig")
+          DEB_SIG=$(get_sig "_amd64.deb.sig")
+          MSI_SIG=$(get_sig "_x64_en-US.msi.sig")
+          MAC_X64_SIG=$(get_sig "_x64.dmg.sig")
+          MAC_ARM_SIG=$(get_sig "_aarch64.dmg.sig")
+          
           cat <<EOF > latest.json
           {
             "version": "$VERSION",
