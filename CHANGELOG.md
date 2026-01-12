@@ -1,4 +1,4 @@
-# Release v0.1.5 - Fixing Check-in Persistence Issues
+# Release v0.1.8 - Fixing Check-in Persistence Issues
 
 Minor release focusing on check-in/check-out stability and UI state management improvements.
 
