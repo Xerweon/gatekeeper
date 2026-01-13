@@ -1,6 +1,6 @@
 [package]
 name = "Gatekeeper"
-version = "0.1.8"
+version = "0.1.9"
 description = "Kiosk to check in and out of xerweon, for staffs."
 authors = ["Nabiel Ahammed"]
 edition = "2021"

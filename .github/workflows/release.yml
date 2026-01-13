@@ -1,5 +1,4 @@
 name: Publish GATEKEEPER
-
 on:
   push:
     tags:
@@ -12,7 +11,6 @@ jobs:
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
-
     strategy:
       fail-fast: false
       matrix:
@@ -25,20 +23,19 @@ jobs:
             args: ''
           - os: windows-latest
             args: ''
-
     steps:
       - uses: actions/checkout@v4
-
+      
       - uses: actions/setup-node@v4
         with:
           node-version: lts/*
-
+      
       - run: npm install -g pnpm
-
+      
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-
+      
       - name: Linux deps
         if: matrix.os == 'ubuntu-22.04'
         run: |
@@ -48,9 +45,32 @@ jobs:
             libappindicator3-dev \
             librsvg2-dev \
             patchelf
-
+      
       - run: pnpm install
-
+      
+      - name: Extract release notes from CHANGELOG
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          
+          # Extract the section for this version from CHANGELOG.md
+          if [ -f "CHANGELOG.md" ]; then
+            # Get content between [VERSION] and next version or end
+            NOTES=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' | tail -n +2)
+            
+            # If empty, use a default message
+            if [ -z "$NOTES" ]; then
+              NOTES="See the CHANGELOG.md file for details about this release."
+            fi
+          else
+            NOTES="See the assets to download this version and install."
+          fi
+          
+          # Save to GitHub output (escape newlines)
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -59,7 +79,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: xerweon GATEKEEPER ${{ github.ref_name }}
-          releaseBody: See the assets to download this version and install.
+          releaseBody: ${{ steps.changelog.outputs.RELEASE_NOTES }}
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -70,43 +90,98 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
-
     steps:
       - uses: actions/checkout@v4
-
+      
+      - name: Wait for assets
+        run: sleep 30
+      
       - name: Generate updater metadata
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -e
-
           VERSION="${GITHUB_REF_NAME#v}"
           REPO="Xerweon/gatekeeper"
           BASE_URL="https://github.com/$REPO/releases/download/v$VERSION"
-
-          echo "Waiting for release assets..."
-          sleep 20
-
+          
+          echo "Fetching signatures for version $VERSION..."
+          
+          # Extract changelog notes for this version
+          if [ -f "CHANGELOG.md" ]; then
+            NOTES=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' | tail -n +2 | sed 's/^### /\n### /g')
+            if [ -z "$NOTES" ]; then
+              NOTES="Release $VERSION - See CHANGELOG.md for details"
+            fi
+          else
+            NOTES="Release $VERSION"
+          fi
+          
+          # Function to fetch and encode signature
           fetch_sig() {
             local file="$1"
-            gh release download "v$VERSION" -R "$REPO" -p "$file.sig" -O sig.bin
-            base64 -w0 sig.bin
+            echo "Fetching signature for: $file"
+            
+            # Download the .sig file
+            gh release download "v$VERSION" -R "$REPO" -p "${file}.sig" -O "temp_${file}.sig" 2>&1
+            
+            if [ ! -f "temp_${file}.sig" ]; then
+              echo "Error: Signature file not found for $file"
+              exit 1
+            fi
+            
+            # Encode to base64
+            base64 -w0 "temp_${file}.sig"
+            
+            # Cleanup
+            rm "temp_${file}.sig"
           }
-
+          
+          # Fetch individual signatures for each platform
+          echo "Fetching Linux AppImage signature..."
           APPIMAGE_SIG=$(fetch_sig "xerweon-GATEKEEPER_${VERSION}_amd64.AppImage")
+          
+          echo "Fetching Linux Debian signature..."
+          DEB_SIG=$(fetch_sig "xerweon-GATEKEEPER_${VERSION}_amd64.deb")
+          
+          echo "Fetching Linux RPM signature..."
+          RPM_SIG=$(fetch_sig "xerweon-GATEKEEPER_${VERSION}-1.x86_64.rpm")
+          
+          echo "Fetching Windows signature..."
           MSI_SIG=$(fetch_sig "xerweon-GATEKEEPER_${VERSION}_x64_en-US.msi")
+          
+          echo "Fetching macOS x64 signature..."
           MAC_X64_SIG=$(fetch_sig "xerweon-GATEKEEPER_${VERSION}_x64.dmg")
+          
+          echo "Fetching macOS ARM signature..."
           MAC_ARM_SIG=$(fetch_sig "xerweon-GATEKEEPER_${VERSION}_aarch64.dmg")
-
+          
+          # Verify signatures are different (sample check)
+          if [ "$APPIMAGE_SIG" = "$MSI_SIG" ] || [ "$APPIMAGE_SIG" = "$MAC_X64_SIG" ] || [ "$DEB_SIG" = "$RPM_SIG" ]; then
+            echo "Warning: Some signatures appear identical!"
+          fi
+          
+          echo "All signatures fetched successfully."
+          
+          # Generate latest.json with all package formats
+          # Use jq to properly escape the notes JSON
           cat > latest.json <<EOF
           {
             "version": "$VERSION",
-            "notes": "Release $VERSION",
+            "notes": $(echo "$NOTES" | jq -Rs .),
             "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "platforms": {
               "linux-x86_64": {
                 "url": "$BASE_URL/xerweon-GATEKEEPER_${VERSION}_amd64.AppImage",
                 "signature": "$APPIMAGE_SIG"
+              },
+              "linux-x86_64-deb": {
+                "url": "$BASE_URL/xerweon-GATEKEEPER_${VERSION}_amd64.deb",
+                "signature": "$DEB_SIG"
+              },
+              "linux-x86_64-rpm": {
+                "url": "$BASE_URL/xerweon-GATEKEEPER_${VERSION}-1.x86_64.rpm",
+                "signature": "$RPM_SIG"
               },
               "windows-x86_64": {
                 "url": "$BASE_URL/xerweon-GATEKEEPER_${VERSION}_x64_en-US.msi",
@@ -123,9 +198,10 @@ jobs:
             }
           }
           EOF
-
+          
+          echo "Generated latest.json:"
           cat latest.json
-
+      
       - name: Upload latest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

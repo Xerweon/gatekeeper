@@ -1,38 +1,48 @@
-# Release v0.1.8 - Fixing Check-in Persistence Issues
+# Changelog
 
-Minor release focusing on check-in/check-out stability and UI state management improvements.
+All notable changes to xerweon™ GATEKEEPER will be documented in this file.
 
-## What's New
-**Better User Feedback**
-- Added toast notifications for successful check-ins and check-outs
-- You'll now see clear success and error messages for every action
-- Enhanced device information display in the kiosk header for better transparency
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-**Smarter Check-in Tracking**
+## [0.1.8] - 2026-01-12
+
+### Added
+- Toast notifications for successful check-ins and check-outs
+- Enhanced device information display in the kiosk header
+- Loading states to prevent duplicate actions and UI glitches
+
+### Changed
 - Improved workstation-specific check-in tracking to prevent conflicts
-- Each workstation now properly tracks its own staff independently
+- Refactored staff fetching into reusable `fetchStaffsData()` function
+- Simplified and tightened `isCheckedIn()` logic
+- Better state handling around check-in/check-out actions
 
-## Bug Fixes
+### Fixed
 - **Critical:** Fixed check-in state persistence after checkout
-  - Check-ins with `checkoutTime` are now properly excluded from active state
-  - Resolved issue where checked-out staff remained visible as checked-in
+- Check-ins with `checkoutTime` now properly excluded from active state
+- Resolved issue where checked-out staff remained visible as checked-in
 - Fixed staff data synchronization after check-in/check-out operations
 - Improved error handling for missing authentication tokens
 
-## Improvements
-- Refactored staff fetching into a reusable fetchStaffsData() function
-- Simplified and tightened the isCheckedIn() logic
-- Better state handling around check-in/check-out actions
-- Added loading states to avoid duplicate actions and UI glitches
-- Improved workstation ID validation and fallback behavior
+### Technical
+- Platform: Tauri v2 + React + Rust
+- Build: Stable
+- Tested on: Windows, Linux, macOS
 
-## Technical 
-- **Platform:** Tauri v2 + React + Rust
-- **Build:** Stable
-- **Tested on:** Windows, Linux, macOS
+## [0.1.7] - 2026-01-10
 
-## Upgrade Notes
-This is a non-breaking release. Simply update and rebuild; no configuration changes needed.
+### Added
+- Initial kiosk mode implementation
+
+### Fixed
+- Authentication flow improvements
+
+## [0.1.6] - 2026-01-08
+
+### Added
+- Basic check-in/check-out functionality
 
 ---
-**Full Changelog:** https://github.com/your-org/xerweon-gatekeeper/compare/v0.1.4...v0.1.5
+
+**Note:** For a full comparison between versions, visit the [GitHub Releases](https://github.com/Xerweon/gatekeeper/releases) page.
