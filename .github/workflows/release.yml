@@ -48,29 +48,6 @@ jobs:
       
       - run: pnpm install
       
-      - name: Extract release notes from CHANGELOG
-        id: changelog
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          
-          # Extract the section for this version from CHANGELOG.md
-          if [ -f "CHANGELOG.md" ]; then
-            # Get content between [VERSION] and next version or end
-            NOTES=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' | tail -n +2)
-            
-            # If empty, use a default message
-            if [ -z "$NOTES" ]; then
-              NOTES="See the CHANGELOG.md file for details about this release."
-            fi
-          else
-            NOTES="See the assets to download this version and install."
-          fi
-          
-          # Save to GitHub output (escape newlines)
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
-          echo "$NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-      
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -79,7 +56,10 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: xerweon GATEKEEPER ${{ github.ref_name }}
-          releaseBody: ${{ steps.changelog.outputs.RELEASE_NOTES }}
+          releaseBody: |
+            Download and install xerweon™ GATEKEEPER ${{ github.ref_name }}.
+            
+            **[View Changelog](https://github.com/Xerweon/gatekeeper/blob/main/CHANGELOG.md)**
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
@@ -105,17 +85,10 @@ jobs:
           REPO="Xerweon/gatekeeper"
           BASE_URL="https://github.com/$REPO/releases/download/v$VERSION"
           
-          echo "Fetching signatures for version $VERSION..."
+          echo "Generating latest.json for version $VERSION..."
           
-          # Extract changelog notes for this version
-          if [ -f "CHANGELOG.md" ]; then
-            NOTES=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d' | tail -n +2 | sed 's/^### /\n### /g')
-            if [ -z "$NOTES" ]; then
-              NOTES="Release $VERSION - See CHANGELOG.md for details"
-            fi
-          else
-            NOTES="Release $VERSION"
-          fi
+          # Simple release notes
+          NOTES="Release $VERSION - See CHANGELOG.md for full details"
           
           # Function to fetch and encode signature
           fetch_sig() {
@@ -164,11 +137,10 @@ jobs:
           echo "All signatures fetched successfully."
           
           # Generate latest.json with all package formats
-          # Use jq to properly escape the notes JSON
           cat > latest.json <<EOF
           {
             "version": "$VERSION",
-            "notes": $(echo "$NOTES" | jq -Rs .),
+            "notes": "$NOTES",
             "pub_date": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
             "platforms": {
               "linux-x86_64": {
