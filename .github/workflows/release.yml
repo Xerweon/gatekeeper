@@ -74,7 +74,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Wait for assets
-        run: sleep 30
+        run: sleep 60
       
       - name: Generate updater metadata
         env:
@@ -90,24 +90,40 @@ jobs:
           # Simple release notes
           NOTES="Release $VERSION - See CHANGELOG.md for full details"
           
-          # Function to fetch and encode signature
+          # Function to fetch and encode signature with retry logic
           fetch_sig() {
             local file="$1"
+            local max_attempts=3
+            local attempt=1
+            
             echo "Fetching signature for: $file"
             
-            # Download the .sig file
-            gh release download "v$VERSION" -R "$REPO" -p "${file}.sig" -O "temp_${file}.sig" 2>&1
+            while [ $attempt -le $max_attempts ]; do
+              echo "Attempt $attempt of $max_attempts..."
+              
+              # Try to download the .sig file
+              if gh release download "v$VERSION" -R "$REPO" -p "${file}.sig" -O "temp_${file}.sig" 2>&1; then
+                if [ -f "temp_${file}.sig" ]; then
+                  # Encode to base64
+                  local signature=$(base64 -w0 "temp_${file}.sig")
+                  # Cleanup
+                  rm "temp_${file}.sig"
+                  echo "$signature"
+                  return 0
+                fi
+              fi
+              
+              echo "Warning: Signature file not found for $file (attempt $attempt)"
+              attempt=$((attempt + 1))
+              
+              if [ $attempt -le $max_attempts ]; then
+                echo "Waiting 10 seconds before retry..."
+                sleep 10
+              fi
+            done
             
-            if [ ! -f "temp_${file}.sig" ]; then
-              echo "Error: Signature file not found for $file"
-              exit 1
-            fi
-            
-            # Encode to base64
-            base64 -w0 "temp_${file}.sig"
-            
-            # Cleanup
-            rm "temp_${file}.sig"
+            echo "Error: Failed to fetch signature for $file after $max_attempts attempts"
+            exit 1
           }
           
           # Fetch individual signatures for each platform
